@@ -1,0 +1,32 @@
+<% if (step.condition) { %>
+    when {
+      expression {
+        return <%= step.condition %>
+      }
+    }
+    <% } %>
+    
+    <% if (step.type === 'sh' || step.type === 'echo' || step.type === 'input') { %>
+    <%= step.type %> '<%= step.value %>'
+    <% } else if (step.type === 'retry') { %>
+    retry(3) {
+      <% step.steps?.forEach(sub => { %>
+        <%- include('step', { step: sub }) %>
+      <% }) %>
+    }
+    <% } else if (step.type === 'timeout') { %>
+    timeout(time: 10, unit: 'MINUTES') {
+      <% step.steps?.forEach(sub => { %>
+        <%- include('step', { step: sub }) %>
+      <% }) %>
+    }
+    <% } else if (step.type === 'parallel') { %>
+    parallel {
+      <% step.steps?.forEach(par => { %>
+        '<%= par.name || 'task' %>' {
+          <%- include('step', { step: par }) %>
+        }
+      <% }) %>
+    }
+    <% } %>
+    

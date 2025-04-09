@@ -1,0 +1,22 @@
+
+{
+  "stages": [
+    {
+      "stepGroups": [
+        {
+          "steps": ["git"]
+        }
+      ]
+    },
+    {
+      "stepGroups": [
+        {
+          "steps": [ "git-check", "单元测试" ]
+        },
+        {
+          "steps": [ "代码压缩" ]
+        }
+      ]
+    }
+  ]
+}
