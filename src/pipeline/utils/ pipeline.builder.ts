@@ -1,38 +1,27 @@
-export interface Param {
-  key: string;
-  value: string;
-}
+import { PipelineConfig } from '../interface/pipeline';
+import { PipelineAgent } from '../interface/agent';
+import { PipelinePost } from '../interface/post';
+import { PipelineOption } from '../interface/options';
+import { PipelineTrigger } from '../interface/trigger';
+import { PipelineStage, PipelineStep } from '../interface/stage';
 
-export interface Step {
-  name: string;
-  params?: Param[];
-  script: string;
-}
-
-export interface StepGroup {
-  steps: Step[];
-}
-
-export interface StageBlock {
-  name: string;
-  type?: string;
-  stepGroup: StepGroup[];
-}
-
-export interface PipelineConfig {
-  agent?: string;
-  environment?: Record<string, string>;
-  tools?: Record<string, string>;
-  options?: string[];
-  triggers?: string[];
-  post?: string;
-  stages: StageBlock[];
-}
+const defaultConfig = {
+  agent: {
+    type: 'any',
+  } as PipelineAgent,
+  stages: [],
+  post: [
+    {
+      key: 'always',
+      value: 'cleanWs()',
+    },
+  ] as PipelinePost[],
+};
 
 export class PipelineBuilder {
-  private config: PipelineConfig = { stages: [] };
+  private config: PipelineConfig = { ...defaultConfig };
 
-  setAgent(agent: string) {
+  setAgent(agent: PipelineAgent) {
     this.config.agent = agent;
   }
 
@@ -45,22 +34,42 @@ export class PipelineBuilder {
     this.config.tools[toolName] = toolValue;
   }
 
-  addOption(option: string) {
-    if (!this.config.options) this.config.options = [];
-    this.config.options.push(option);
+  addOption(option: PipelineOption) {
+    if (!this.config.options) this.config.options = {};
+    this.config.options = { ...this.config.options, ...option };
   }
 
-  addTrigger(trigger: string) {
-    if (!this.config.triggers) this.config.triggers = [];
-    this.config.triggers.push(trigger);
+  addTrigger(trigger: PipelineTrigger) {
+    if (!this.config.triggers) this.config.triggers = {};
+    this.config.triggers = { ...this.config.triggers, ...trigger };
   }
 
-  setPostActions(script: string) {
-    this.config.post = script;
+  setPostActions(postActions: PipelinePost) {
+    this.config.post.push(postActions);
   }
 
-  addStage(stage: StageBlock) {
-    this.config.stages.push(stage);
+  // addStage(stage: ) {
+  //   this.config.stages.push(stage);
+  // }
+  private renderAgent(): string {
+    if (!this.config.agent) return '';
+    const agent = this.config.agent;
+    switch (agent.type) {
+      case 'any':
+        return 'agent any';
+      case 'none':
+        return 'agent none';
+      case 'label':
+        return `agent { label '${agent.value}' }`;
+      case 'node':
+        return `agent { node { label '${agent.label}' } }`;
+      case 'docker':
+        return `agent { docker { image '${agent.image}' } }`;
+      case 'dockerfile':
+        return `agent { dockerfile { dir '${agent.dir}' } }`;
+      default:
+        return '';
+    }
   }
 
   private renderEnvironment(): string {
@@ -83,41 +92,136 @@ export class PipelineBuilder {
 
   private renderOptions(): string {
     if (!this.config.options) return '';
-    const lines = this.config.options.map((opt) => `    ${opt}`);
-    return `  options {
-  ${lines.join('\n')}
-    }\n`;
+    const optionRenderers: Record<string, (value: any) => string> = {
+      buildDiscarder: (value) => {
+        const logRotator = value?.logRotator;
+        if (!logRotator) return '';
+        const params = [
+          logRotator.numToKeep && `numToKeep: ${logRotator.numToKeep}`,
+          logRotator.artifactNumToKeep &&
+            `artifactNumToKeep: ${logRotator.artifactNumToKeep}`,
+          logRotator.daysToKeep && `daysToKeep: ${logRotator.daysToKeep}`,
+          logRotator.artifactDaysToKeep &&
+            `artifactDaysToKeep: ${logRotator.artifactDaysToKeep}`,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        return `buildDiscarder(logRotator(${params}))`;
+      },
+
+      disableConcurrentBuilds: (value) =>
+        value ? 'disableConcurrentBuilds()' : '',
+
+      skipDefaultCheckout: (value) => (value ? 'skipDefaultCheckout()' : ''),
+
+      skipStagesAfterUnstable: (value) =>
+        value ? 'skipStagesAfterUnstable()' : '',
+
+      checkoutToSubdirectory: (value) =>
+        value ? `checkoutToSubdirectory('${value}')` : '',
+
+      timeout: (value) => {
+        if (!value?.time || !value?.unit) return '';
+        return `timeout(time: ${value.time}, unit: '${value.unit}')`;
+      },
+
+      retry: (value) => (value ? `retry(${value})` : ''),
+
+      timestamps: (value) => (value ? 'timestamps()' : ''),
+    };
+
+    // 遍历所有选项并生成代码
+    const lines = Object.entries(this.config.options)
+      .map(([key, value]) => {
+        const render = optionRenderers[key];
+        return render ? render(value) : '';
+      })
+      .filter((line) => line !== '');
+
+    return lines.length > 0
+      ? `options {\n    ${lines.join('\n    ')}\n}\n`
+      : '';
   }
 
   private renderTriggers(): string {
     if (!this.config.triggers) return '';
-    const lines = this.config.triggers.map((t) => `    ${t}`);
-    return `  triggers {
-  ${lines.join('\n')}
+    const lines: string[] = [];
+
+    if (this.config.triggers.cron) {
+      lines.push(`cron('${this.config.triggers.cron}')`);
+    }
+
+    if (this.config.triggers.pollSCM) {
+      lines.push(`pollSCM('${this.config.triggers.pollSCM}')`);
+    }
+    if (this.config.triggers.upstream) {
+      const {
+        upstreamProject,
+        targetBranches,
+        threshold,
+        ignoreUpstreamChanges,
+        allowDependencies,
+      } = this.config.triggers.upstream;
+
+      // 构造参数列表
+      const params = [
+        `upstreamProjects: '${upstreamProject}'`, // 必填参数
+        targetBranches
+          ? `targetBranches: [${targetBranches.map((b) => `'${b}'`).join(', ')}]`
+          : null,
+        threshold
+          ? `threshold: hudson.model.Result.${threshold.toUpperCase()}`
+          : null,
+        ignoreUpstreamChanges !== undefined
+          ? `ignoreUpstreamChanges: ${ignoreUpstreamChanges}`
+          : null,
+        allowDependencies !== undefined
+          ? `allowDependencies: ${allowDependencies}`
+          : null,
+      ].filter(Boolean); // 过滤空值
+
+      lines.push(`upstream(${params.join(', ')})`);
+    }
+
+    if (lines.length === 0) return '';
+
+    return `triggers {
+      ${lines.join('\n    ')}
     }\n`;
   }
 
   private renderPost(): string {
-    if (!this.config.post) return '';
-    return `  post {
-      always {
-        ${this.config.post}
-      }
-    }\n`;
+    if (!this.config.post || this.config.post.length === 0) return '';
+
+    const postBlocks = this.config.post.map((block) => {
+      const commands = block.value
+        .split(/[;\n]/)
+        .map((cmd) => cmd.trim())
+        .filter((cmd) => cmd !== '');
+
+      const commandLines = commands
+        .map((cmd) => (cmd.startsWith('sh ') ? cmd : `${cmd}`))
+        .join('\n        ');
+      return `${block.key} {\n        ${commandLines}\n      }`;
+    });
+    return `post {\n    ${postBlocks.join('\n    ')}\n  }`;
   }
 
   private renderStages(): string {
+    if (this.config.stages.length === 0) {
+      throw new Error('No stages defined in the pipeline.');
+    }
     return `  stages {
   ${this.config.stages.map(this.renderStageBlock).join('\n')}
     }`;
   }
 
-  private renderStageBlock(stage: StageBlock): string {
-    const blocks = stage.stepGroup.map((group, index) => {
+  private renderStageBlock(stage: PipelineStage): string {
+    const blocks = stage.stepGroups.map((group, index) => {
       if (group.steps.length === 1) {
-        return this.renderSingleStep(stage.name, group.steps[0]);
+        return this.renderSingleStep(stage.label, group.steps[0]);
       } else {
-        return `      stage('${stage.name} - group${index + 1}') {
+        return `      stage('${stage.label} - group${index + 1}') {
           parallel {
   ${group.steps.map((step) => this.renderParallelStep(step)).join('\n')}
           }
@@ -127,7 +231,7 @@ export class PipelineBuilder {
     return blocks.join('\n');
   }
 
-  private renderSingleStep(stageName: string, step: Step): string {
+  private renderSingleStep(stageName: string, step: PipelineStep): string {
     const rendered = this.interpolateScript(step);
     return `    stage('${stageName}') {
         steps {
@@ -138,7 +242,7 @@ export class PipelineBuilder {
       }`;
   }
 
-  private renderParallelStep(step: Step): string {
+  private renderParallelStep(step: PipelineStep): string {
     const rendered = this.interpolateScript(step);
     return `          stage('${step.name}') {
               steps {
@@ -149,7 +253,7 @@ export class PipelineBuilder {
             }`;
   }
 
-  private interpolateScript(step: Step): string {
+  private interpolateScript(step: PipelineStep): string {
     let script = step.script;
     if (step.params) {
       for (const param of step.params) {
@@ -165,8 +269,14 @@ export class PipelineBuilder {
 
   generate(): string {
     return `pipeline {
-    agent { label '${this.config.agent ?? 'any'}' }
-  ${this.renderEnvironment()}${this.renderTools()}${this.renderOptions()}${this.renderTriggers()}${this.renderStages()}\n${this.renderPost()}}
-  `;
+        ${this.renderAgent()}\n
+        ${this.renderEnvironment()}\n
+        ${this.renderTools()}\n
+        ${this.renderOptions()}\n
+        ${this.renderTriggers()}\n
+        ${this.renderStages()}\n
+        ${this.renderPost()}
+      }
+    `;
   }
 }
