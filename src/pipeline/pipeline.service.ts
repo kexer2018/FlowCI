@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
 import { UpdatePipelineDto } from './dto/update-pipeline.dto';
+import { Stage } from './interface/pipeline';
 
 @Injectable()
 export class PipelineService {
   // 获取列表
-  async getList() {
+  async getList(username: string): Promise<Stage[]> {
     return [];
   }
 
