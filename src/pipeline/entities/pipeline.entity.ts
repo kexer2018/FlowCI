@@ -9,7 +9,7 @@ import {
 @Entity()
 export class Pipeline {
   @PrimaryGeneratedColumn()
-  id: string;
+  id: number;
 
   @Column()
   name: string;

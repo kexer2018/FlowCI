@@ -1,0 +1,73 @@
+{
+    "id": "494aeb5e-b2be-4118-877b-be1ce4270889",
+    "name": "python构建模板",
+    "label": "python",
+    "type" :"buildIn",
+    "description": "python基础构建模板,包含代码拉取,代码检查,单元测试",
+    "stages": [
+        {
+            "id": "1",
+            "name": "git",
+            "label": "代码源",
+            "type": "source",
+            "stepGroups": [
+                {
+                    "steps": [
+                        {
+                            "id": "11",
+                            "name": "git",
+                            "params": [
+                                { "key": "repository", "vaule": "" },
+                                { "key": "branch", "value": "master" }
+                            ],
+                            "script": "git clone {{repository}} && git checkout {{branch}}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "2",
+            "name": "build",
+            "label": "代码检查",
+            "stepGroups": [
+                {
+                    "steps": [
+                        {
+                            "id": "21",
+                            "name": "code lint",
+                            "label": "代码检查",
+                            "params": [
+                                { "key": "repository", "vaule": "" }
+                            ],
+                            "script": "npm run lint"
+                        },
+                        {
+                            "id": "22",
+                            "name": "unit test",
+                            "label": "单元测试",
+                            "params": [
+                                { "key": "repository", "vaule": "" }
+                            ],
+                            "script": "npm run test"
+                        }
+                    ]
+                },
+                {
+                    "steps": [
+                        {
+                            "id": "23",
+                            "name": "code format",
+                            "label": "代码格式化",
+                            "params": [
+                                { "key": "repository", "vaule": "" }
+                            ],
+                            "script": "npm run format"
+                        }
+                    ]
+                }
+
+            ]
+        }
+    ]
+}

@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UserModule } from './user/user.module';
 import { PipelineModule } from './pipeline/pipeline.module';
-// import { JenkinsModule } from './jenkins/jenkins.module';
-// import { DatabaseModule } from './database/database.module';
+import { DatabaseModule } from './database/database.module';
+import { UserModule } from './user/user.module';
 
 @Module({
-  imports: [UserModule, PipelineModule],
+  imports: [DatabaseModule, PipelineModule, UserModule],
   controllers: [AppController],
   providers: [AppService],
 })

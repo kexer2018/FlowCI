@@ -48,9 +48,15 @@ export class PipelineBuilder {
     this.config.post.push(postActions);
   }
 
-  // addStage(stage: ) {
-  //   this.config.stages.push(stage);
-  // }
+  addStage(stage: any) {
+    if (!this.config.stages) this.config.stages = [];
+    this.config.stages.push(stage);
+  }
+
+  applyTemplate(json: any) {
+    this.config.stages = json.stages;
+  }
+
   private renderAgent(): string {
     if (!this.config.agent) return '';
     const agent = this.config.agent;
@@ -217,6 +223,7 @@ export class PipelineBuilder {
   }
 
   private renderStageBlock(stage: PipelineStage): string {
+    console.log(stage);
     const blocks = stage.stepGroups.map((group, index) => {
       if (group.steps.length === 1) {
         return this.renderSingleStep(stage.label, group.steps[0]);
