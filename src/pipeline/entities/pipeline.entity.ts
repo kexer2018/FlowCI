@@ -8,16 +8,20 @@ import {
 
 @Entity()
 export class Pipeline {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column()
   name: string;
 
   @Column({ nullable: true })
-  description: string;
+  description?: string;
 
-  @Column({ default: 'custom' })
+  @Column({
+    type: 'enum',
+    enum: ['builtin', 'custom'],
+    default: 'custom',
+  })
   type: 'builtin' | 'custom';
 
   @Column()
@@ -28,6 +32,9 @@ export class Pipeline {
 
   @Column({ type: 'jsonb' })
   config: Record<string, any>;
+
+  @Column({ nullable: true })
+  template_id: string;
 
   @CreateDateColumn({
     type: 'timestamptz',

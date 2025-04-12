@@ -126,6 +126,4 @@ export class JenkinsService {
       }, 2000);
     });
   }
-
-  // 其他方法可根据需要继续扩展...
 }

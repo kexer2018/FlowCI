@@ -1,0 +1,8 @@
+{
+  "id": "123",
+  "name": "shell脚本执行",
+  "label": "shell",
+  "description": "shell执行脚本,可以填写shell命令进行执行",
+  "params": [{ "key": "text", "value": "" }],
+  "script": "sh {{text}}"
+}

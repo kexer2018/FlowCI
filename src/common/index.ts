@@ -35,7 +35,7 @@ interface Param {
 //   description: string;
 // }
 
-interface Template {
+export interface Template {
   id: string;
   name: string;
   label: string;
