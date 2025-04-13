@@ -24,7 +24,6 @@ type timeout = {
   unit: string;
 };
 
-// 基础 Step 定义
 export class PipelineStep {
   @IsEnum(StepType)
   type: StepType;

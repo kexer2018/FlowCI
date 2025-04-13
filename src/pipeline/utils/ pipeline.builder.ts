@@ -44,8 +44,9 @@ export class PipelineBuilder {
     this.config.triggers = { ...this.config.triggers, ...trigger };
   }
 
-  setPostActions(postActions: PipelinePost) {
-    this.config.post.push(postActions);
+  addPostAction(postAction: PipelinePost) {
+    if (!this.config.post) this.config.post = [];
+    this.config.post.push(postAction);
   }
 
   addStage(stage: any) {
@@ -218,17 +219,17 @@ export class PipelineBuilder {
       throw new Error('No stages defined in the pipeline.');
     }
     return `  stages {
-  ${this.config.stages.map(this.renderStageBlock).join('\n')}
-    }`;
+    ${this.config.stages.map((stage) => this.renderStageBlock(stage)).join('\n')}
+      }`;
   }
 
   private renderStageBlock(stage: PipelineStage): string {
-    console.log(stage);
+    const label = stage.label ?? stage.name; // 优先使用 label
     const blocks = stage.stepGroups.map((group, index) => {
       if (group.steps.length === 1) {
-        return this.renderSingleStep(stage.label, group.steps[0]);
+        return this.renderSingleStep(label, group.steps[0]);
       } else {
-        return `      stage('${stage.label} - group${index + 1}') {
+        return `      stage('${label} - group${index + 1}') {
           parallel {
   ${group.steps.map((step) => this.renderParallelStep(step)).join('\n')}
           }
@@ -275,15 +276,32 @@ export class PipelineBuilder {
   }
 
   generate(): string {
-    return `pipeline {
-        ${this.renderAgent()}\n
-        ${this.renderEnvironment()}\n
-        ${this.renderTools()}\n
-        ${this.renderOptions()}\n
-        ${this.renderTriggers()}\n
-        ${this.renderStages()}\n
-        ${this.renderPost()}
-      }
-    `;
+    const sections = [
+      this.renderAgent(),
+      this.renderEnvironment(),
+      this.renderTools(),
+      this.renderOptions(),
+      this.renderTriggers(),
+      this.renderStages(),
+      this.renderPost(),
+    ].filter(Boolean);
+
+    return `pipeline {\n${sections.join('\n\n')}\n}`;
+  }
+
+  toXml(script: string, type: string = 'singal') {
+    //转成xml给Jenkins服务器
+    let xml: string;
+    if (type === 'singal') {
+      xml = `<flow-definition plugin="workflow-job">
+                    <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+                      <script><![CDATA[${script}]]></script>
+                      <sandbox>true</sandbox>
+                    </definition>
+                    <disabled>false</disabled>
+                  </flow-definition>
+      `;
+    }
+    return xml;
   }
 }

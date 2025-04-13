@@ -1,129 +1,143 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
+import { EventEmitter } from 'events';
 import { ConfigService } from '@nestjs/config';
 import Jenkins from 'jenkins';
 
-export interface JenkinsConfig {
-  baseUrl: string;
-  user: string;
-  apiToken: string;
-}
-
 @Injectable()
-export class JenkinsService {
-  private readonly jenkinsClient: Jenkins;
+export class JenkinsService extends EventEmitter implements OnModuleInit {
   private readonly logger = new Logger(JenkinsService.name);
+  private jenkins: Jenkins;
 
-  constructor(private configService: ConfigService) {
-    const jenkinsConfig = this.getJenkinsConfig();
-    this.validateConfig(jenkinsConfig);
+  constructor(private readonly configService: ConfigService) {
+    super();
+  }
 
-    this.jenkinsClient = new Jenkins({
-      baseUrl: jenkinsConfig.baseUrl,
+  onModuleInit() {
+    const jenkinsURL = this.configService.get('JENKINS_SERVICE_URL');
+    if (!jenkinsURL) {
+      throw new InternalServerErrorException('Jenkins URL is not configured');
+    }
+
+    this.jenkins = new Jenkins({
+      baseUrl: jenkinsURL,
       crumbIssuer: true,
-      headers: {
-        Authorization: this.createBasicAuthHeader(
-          jenkinsConfig.user,
-          jenkinsConfig.apiToken,
-        ),
-      },
     });
   }
 
-  // 基础配置方法
-  private getJenkinsConfig(): JenkinsConfig {
-    return {
-      baseUrl: this.configService.get<string>('JENKINS_URL'),
-      user: this.configService.get<string>('JENKINS_USER'),
-      apiToken: this.configService.get<string>('JENKINS_API_TOKEN'),
-    };
+  async getJenkinsInfo() {
+    return await this.jenkins.info();
   }
 
-  private validateConfig(config: JenkinsConfig): void {
-    if (!config.baseUrl || !config.user || !config.apiToken) {
-      throw new Error('Missing Jenkins configuration parameters');
-    }
+  async getJobLogs(name: string) {
+    return await this.jenkins.build.log(name, 2);
   }
 
-  private createBasicAuthHeader(username: string, password: string): string {
-    return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+  async getBuildInfo(name: string, number: number) {
+    return this.jenkins.build.get(name, number);
   }
 
-  // 常用方法封装
-  async buildJob(
-    jobName: string,
-    parameters?: Record<string, any>,
-  ): Promise<number> {
-    try {
-      const queueId = await this.jenkinsClient.job.build({
-        name: jobName,
-        parameters,
-      });
-      return this.waitForBuildStart(queueId);
-    } catch (error) {
-      this.logger.error(`Failed to build job ${jobName}: ${error.message}`);
-      throw error;
-    }
+  async stopBuild(name: string, number: number) {
+    return this.jenkins.build.stop(name, number);
   }
 
-  async getJobInfo(jobName: string): Promise<any> {
-    try {
-      return await this.jenkinsClient.job.get(jobName);
-    } catch (error) {
-      this.logger.error(`Failed to get job info ${jobName}: ${error.message}`);
-      throw error;
-    }
+  async termBuild(name: string, number: number) {
+    return this.jenkins.build.term(name, number);
   }
 
-  async getBuildLogs(jobName: string, buildNumber: number): Promise<string> {
-    try {
-      return await this.jenkinsClient.build.log(jobName, buildNumber);
-    } catch (error) {
-      this.logger.error(
-        `Failed to get logs for ${jobName}#${buildNumber}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
+  async logStream(name: string, number: number) {
+    const logger = await this.jenkins.build.logStream(name, number);
 
-  // 高级功能封装
-  async triggerParameterizedBuild(
-    jobName: string,
-    parameters: Record<string, any>,
-  ): Promise<number> {
-    return this.buildJob(jobName, parameters);
-  }
-
-  async getBuildStatus(jobName: string, buildNumber: number): Promise<any> {
-    try {
-      return await this.jenkinsClient.build.get(jobName, buildNumber);
-    } catch (error) {
-      this.logger.error(
-        `Failed to get build status ${jobName}#${buildNumber}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  // 私有帮助方法
-  private async waitForBuildStart(queueId: number): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        try {
-          const queueItem = await this.jenkinsClient.queue.item(queueId);
-          if (queueItem.executable?.number) {
-            clearInterval(interval);
-            resolve(queueItem.executable.number);
-          }
-
-          if (queueItem.cancelled) {
-            clearInterval(interval);
-            reject(new Error('Build cancelled in queue'));
-          }
-        } catch (error) {
-          clearInterval(interval);
-          reject(error);
-        }
-      }, 2000);
+    logger.on('data', (text: string) => {
+      this.logger.log(`[LOG] ${text}`);
+      this.emit('log', text);
     });
+
+    logger.on('error', (err: Error) => {
+      this.logger.error('[ERROR]', err);
+      this.emit('error', err);
+    });
+
+    logger.on('end', () => {
+      this.logger.log('[END] Log Stream Ended');
+      this.emit('end');
+    });
+
+    return logger;
+  }
+
+  async jobBuild(name: string) {
+    try {
+      this.logger.log(`Starting job: ${name}`);
+      await this.jenkins.job.build({ name });
+
+      let buildNumber = null;
+      while (!buildNumber) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const jobInfo = await this.getJobInfo(name);
+        buildNumber = jobInfo.lastBuild?.number;
+      }
+
+      this.logStream(name, buildNumber);
+    } catch (error) {
+      this.logger.error('Job Build Error:', error);
+      throw new InternalServerErrorException('Job build failed');
+    }
+  }
+
+  async getJobConfig(name: string) {
+    return this.jenkins.job.config(name);
+  }
+
+  async getJobInfo(name: string) {
+    return this.jenkins.job.get(name);
+  }
+
+  async getJobList(folder?: string) {
+    return folder ? this.jenkins.job.list(folder) : this.jenkins.job.list();
+  }
+
+  // async createJob(opts: { name: string; type: string; config: any }) {
+  //   const { name, type, config } = opts;
+  //   const xml = await this.generateJobXML(type, config);
+  //   return this.jenkins.job.create(name, xml);
+  // }
+
+  async checkExistsJob(name: string) {
+    return this.jenkins.job.exists(name);
+  }
+
+  async deleteJob(name: string) {
+    return this.jenkins.job.destroy(name);
+  }
+
+  async updateEnableJob(name: string, enable: boolean) {
+    return enable
+      ? this.jenkins.job.enable(name)
+      : this.jenkins.job.disable(name);
+  }
+
+  async queueList() {
+    return this.jenkins.queue.list();
+  }
+
+  async getItemInfo(id: number) {
+    return this.jenkins.queue.item(id);
+  }
+
+  async cancelItem(id: number) {
+    return this.jenkins.queue.cancel(id);
+  }
+
+  async getViewInfo(name: string) {
+    return this.jenkins.view.get(name);
+  }
+
+  async getViewList() {
+    return this.jenkins.view.list();
   }
 }

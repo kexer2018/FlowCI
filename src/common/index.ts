@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
+import NodeCache = require('node-cache');
 
 interface Stage {
   id: string;
@@ -45,19 +46,20 @@ export interface Template {
 }
 
 export const BuiltInCache = {
-  plugins: new Map<string, any>(),
-  templates: new Map<string, Template>(),
+  plugins: new NodeCache({ stdTTL: 0, checkperiod: 600 }),
+  templates: new NodeCache({ stdTTL: 0, checkperiod: 600 }),
 };
 
 export async function load() {
   const loadJsonFiles = async (
     folderPath: string,
-    cacheMap: Map<string, any>,
+    cache: NodeCache,
+    keyField: string = 'id',
   ) => {
     const files = await readdir(folderPath);
+
     for (const file of files) {
       const fullPath = join(folderPath, file);
-
       if (!file.endsWith('.json')) continue;
 
       try {
@@ -66,22 +68,26 @@ export async function load() {
           console.warn(`[SKIP] ${file} is empty.`);
           continue;
         }
+
         let data: any;
         try {
           data = JSON.parse(content);
-        } catch (parseError) {
-          console.warn(`[SKIP] ${file} is not valid JSON.`, parseError.message);
+        } catch (err) {
+          console.warn(`[SKIP] ${file} is not valid JSON.`, err.message);
           continue;
         }
+
         if (!data || Object.keys(data).length === 0) {
           console.warn(`[SKIP] ${file} contains no usable data.`);
           continue;
         }
-        if (!data.id) {
-          console.warn(`[SKIP] ${file} missing "id" field.`);
+
+        if (!data[keyField]) {
+          console.warn(`[SKIP] ${file} missing "${keyField}" field.`);
           continue;
         }
-        cacheMap.set(data.id, data);
+
+        cache.set(data[keyField], data);
       } catch (err) {
         console.error(`[ERROR] Failed to process file: ${file}`, err);
       }
@@ -89,5 +95,5 @@ export async function load() {
   };
 
   await loadJsonFiles(join(__dirname, 'templates'), BuiltInCache.templates);
-  await loadJsonFiles(join(__dirname, 'plugins'), BuiltInCache.plugins);
+  await loadJsonFiles(join(__dirname, 'plugins'), BuiltInCache.plugins, 'id');
 }

@@ -21,7 +21,7 @@ export class Plugin {
   description: string;
 
   @Column({ type: 'jsonb' })
-  config: Record<string, any>;
+  config: string;
 
   @Column({ default: 'builtin' })
   type: 'builtin' | 'custom';

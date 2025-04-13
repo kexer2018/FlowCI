@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class Pipeline {
+export class PipelineEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -31,7 +31,7 @@ export class Pipeline {
   created_by: string;
 
   @Column({ type: 'jsonb' })
-  config: Record<string, any>;
+  config: string;
 
   @Column({ nullable: true })
   template_id: string;
