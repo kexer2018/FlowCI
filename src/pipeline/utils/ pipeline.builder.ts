@@ -1,27 +1,21 @@
-import { PipelineConfig } from '../interface/pipeline';
-import { PipelineAgent } from '../interface/agent';
-import { PipelinePost } from '../interface/post';
-import { PipelineOption } from '../interface/options';
-import { PipelineTrigger } from '../interface/trigger';
+import {
+  PipelineConfig,
+  PostAction,
+  Agent,
+  Option,
+  Trigger,
+} from '../interface/pipeline';
+
 import { PipelineStage, PipelineStep } from '../interface/stage';
 
-const defaultConfig = {
-  agent: {
-    type: 'any',
-  } as PipelineAgent,
-  stages: [],
-  post: [
-    {
-      key: 'always',
-      value: 'cleanWs()',
-    },
-  ] as PipelinePost[],
-};
-
 export class PipelineBuilder {
-  private config: PipelineConfig = { ...defaultConfig };
+  private config: PipelineConfig = {
+    agent: { type: 'any' },
+    stages: [],
+    post: [],
+  };
 
-  setAgent(agent: PipelineAgent) {
+  setAgent(agent: Agent) {
     this.config.agent = agent;
   }
 
@@ -29,24 +23,21 @@ export class PipelineBuilder {
     this.config.environment = env;
   }
 
-  addTool(toolName: string, toolValue: string) {
+  setTool(toolName: string, toolValue: string) {
     if (!this.config.tools) this.config.tools = {};
     this.config.tools[toolName] = toolValue;
   }
 
-  addOption(option: PipelineOption) {
-    if (!this.config.options) this.config.options = {};
-    this.config.options = { ...this.config.options, ...option };
+  addOptions(options: Option[]) {
+    this.config.options = [...(this.config.options || []), ...options];
   }
 
-  addTrigger(trigger: PipelineTrigger) {
-    if (!this.config.triggers) this.config.triggers = {};
-    this.config.triggers = { ...this.config.triggers, ...trigger };
+  addTriggers(triggers: Trigger[]) {
+    this.config.triggers = [...(this.config.triggers || []), ...triggers];
   }
 
-  addPostAction(postAction: PipelinePost) {
-    if (!this.config.post) this.config.post = [];
-    this.config.post.push(postAction);
+  setPostActions(postActions: PostAction[]) {
+    this.config.post = [...this.config.post, ...postActions];
   }
 
   addStage(stage: any) {
@@ -59,21 +50,75 @@ export class PipelineBuilder {
   }
 
   private renderAgent(): string {
-    if (!this.config.agent) return '';
-    const agent = this.config.agent;
+    const { agent } = this.config;
+    if (!agent) return '';
     switch (agent.type) {
       case 'any':
         return 'agent any';
       case 'none':
         return 'agent none';
       case 'label':
-        return `agent { label '${agent.value}' }`;
+        return `agent { label '${agent.options?.label || ''}' }`;
       case 'node':
-        return `agent { node { label '${agent.label}' } }`;
+        return `agent { node { label '${agent.options?.label || ''}' } }`;
       case 'docker':
-        return `agent { docker { image '${agent.image}' } }`;
       case 'dockerfile':
-        return `agent { dockerfile { dir '${agent.dir}' } }`;
+        return this.renderDockerAgent(agent.options, agent.type);
+      default:
+        return '';
+    }
+  }
+  private renderDockerAgent(
+    options: Agent['options'] = {},
+    type: string,
+  ): string {
+    const entries = Object.entries({ ...options?.custom, ...options });
+    const lines = entries.map(([key, value]) => `        ${key} '${value}'`);
+    return `agent {\n    ${type} {\n${lines.join('\n')}\n    }\n}`;
+  }
+
+  private renderTriggers(): string {
+    const { triggers } = this.config;
+    if (!triggers || triggers.length === 0) return '';
+
+    const lines = triggers
+      .map((trigger) => this.renderSingleTrigger(trigger))
+      .filter(Boolean);
+
+    if (lines.length === 0) return '';
+
+    return `triggers {
+      ${lines.join('\n    ')}
+    }\n`;
+  }
+
+  private renderSingleTrigger(trigger: Trigger): string {
+    switch (trigger.type) {
+      case 'cron':
+        return `cron('${trigger.cron}')`;
+
+      case 'pollSCM':
+        return `pollSCM('${trigger.interval}')`;
+
+      case 'upstream':
+        const params = [
+          `upstreamProjects: '${trigger.upstreamProject}'`,
+          trigger.targetBranches?.length
+            ? `targetBranches: [${trigger.targetBranches.map((b: string) => `'${b}'`).join(', ')}]`
+            : null,
+          trigger.threshold
+            ? `threshold: hudson.model.Result.${trigger.threshold.toUpperCase()}`
+            : null,
+          trigger.ignoreUpstreamChanges !== undefined
+            ? `ignoreUpstreamChanges: ${trigger.ignoreUpstreamChanges}`
+            : null,
+          trigger.allowDependencies !== undefined
+            ? `allowDependencies: ${trigger.allowDependencies}`
+            : null,
+        ].filter(Boolean);
+
+        return `upstream(${params.join(', ')})`;
+
       default:
         return '';
     }
@@ -131,13 +176,10 @@ export class PipelineBuilder {
         if (!value?.time || !value?.unit) return '';
         return `timeout(time: ${value.time}, unit: '${value.unit}')`;
       },
-
       retry: (value) => (value ? `retry(${value})` : ''),
-
       timestamps: (value) => (value ? 'timestamps()' : ''),
     };
 
-    // 遍历所有选项并生成代码
     const lines = Object.entries(this.config.options)
       .map(([key, value]) => {
         const render = optionRenderers[key];
@@ -150,58 +192,11 @@ export class PipelineBuilder {
       : '';
   }
 
-  private renderTriggers(): string {
-    if (!this.config.triggers) return '';
-    const lines: string[] = [];
-
-    if (this.config.triggers.cron) {
-      lines.push(`cron('${this.config.triggers.cron}')`);
-    }
-
-    if (this.config.triggers.pollSCM) {
-      lines.push(`pollSCM('${this.config.triggers.pollSCM}')`);
-    }
-    if (this.config.triggers.upstream) {
-      const {
-        upstreamProject,
-        targetBranches,
-        threshold,
-        ignoreUpstreamChanges,
-        allowDependencies,
-      } = this.config.triggers.upstream;
-
-      // 构造参数列表
-      const params = [
-        `upstreamProjects: '${upstreamProject}'`, // 必填参数
-        targetBranches
-          ? `targetBranches: [${targetBranches.map((b) => `'${b}'`).join(', ')}]`
-          : null,
-        threshold
-          ? `threshold: hudson.model.Result.${threshold.toUpperCase()}`
-          : null,
-        ignoreUpstreamChanges !== undefined
-          ? `ignoreUpstreamChanges: ${ignoreUpstreamChanges}`
-          : null,
-        allowDependencies !== undefined
-          ? `allowDependencies: ${allowDependencies}`
-          : null,
-      ].filter(Boolean); // 过滤空值
-
-      lines.push(`upstream(${params.join(', ')})`);
-    }
-
-    if (lines.length === 0) return '';
-
-    return `triggers {
-      ${lines.join('\n    ')}
-    }\n`;
-  }
-
   private renderPost(): string {
     if (!this.config.post || this.config.post.length === 0) return '';
 
     const postBlocks = this.config.post.map((block) => {
-      const commands = block.value
+      const commands = block.script
         .split(/[;\n]/)
         .map((cmd) => cmd.trim())
         .filter((cmd) => cmd !== '');
@@ -209,7 +204,7 @@ export class PipelineBuilder {
       const commandLines = commands
         .map((cmd) => (cmd.startsWith('sh ') ? cmd : `${cmd}`))
         .join('\n        ');
-      return `${block.key} {\n        ${commandLines}\n      }`;
+      return `${block.condition} {\n        ${commandLines}\n      }`;
     });
     return `post {\n    ${postBlocks.join('\n    ')}\n  }`;
   }

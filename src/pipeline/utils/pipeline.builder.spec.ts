@@ -31,18 +31,26 @@ describe('Pipeline Builder', () => {
     pipelineBuilder.setAgent({
       type: 'any',
     });
-    pipelineBuilder.addTool('node', 'nodejs-18');
-    pipelineBuilder.addOption({
-      timeout: {
-        time: '10',
-        unit: 'MINUTES',
+    pipelineBuilder.setTool('node', 'nodejs-18');
+    pipelineBuilder.addTriggers([
+      {
+        type: 'cron',
+        cron: '*/5 * * * *',
       },
-    });
-    pipelineBuilder.addTrigger({
-      cron: '*/5 * * * *',
-    });
+      {
+        type: 'pollSCM',
+        interval: 'H/15 * * * *',
+      },
+      {
+        type: 'upstream',
+        upstreamProject: 'SomeOtherProject',
+        threshold: 'SUCCESS',
+        targetBranches: ['main'],
+      },
+    ]);
     const script = pipelineBuilder.generate();
-    console.log(pipelineBuilder.toXml(script));
+    console.log('script:', script);
+    // console.log(pipelineBuilder.toXml(script));
 
     // const config = { stages: ['build', 'test'] };
     // const result = buildPipeline(config);

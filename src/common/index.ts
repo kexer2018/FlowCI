@@ -28,13 +28,15 @@ interface Param {
   value: string;
 }
 
-// interface Plugin {
-//   id: string;
-//   name: string;
-//   label: string;
-//   type: string;
-//   description: string;
-// }
+interface Plugin {
+  id: string;
+  name: string;
+  label: string;
+  type?: string;
+  description: string;
+  params: Param[];
+  script?: string;
+}
 
 export interface Template {
   id: string;
@@ -95,5 +97,5 @@ export async function load() {
   };
 
   await loadJsonFiles(join(__dirname, 'templates'), BuiltInCache.templates);
-  await loadJsonFiles(join(__dirname, 'plugins'), BuiltInCache.plugins, 'id');
+  await loadJsonFiles(join(__dirname, 'plugins'), BuiltInCache.plugins);
 }

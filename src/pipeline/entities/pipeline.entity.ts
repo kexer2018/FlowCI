@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class PipelineEntity {
+export class Pipeline {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
