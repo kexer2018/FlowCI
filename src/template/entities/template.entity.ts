@@ -1,35 +1,33 @@
 import {
-  Column,
   Entity,
   PrimaryGeneratedColumn,
+  Column,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
-// import { PipelineStage } from 'src/template/interface/stage';
-
-@Entity('pipeline')
-export class PipelineEntity {
+@Entity('template')
+export class TemplateEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
   name: string;
 
+  @Column()
+  label: string;
+
+  @Column()
+  type: string;
+
   @Column({ nullable: true })
-  description?: string;
+  description: string;
 
-  @Column()
-  language: string;
-
-  @Column()
+  @Column({ default: 'system' })
   createBy: string;
 
-  @Column({ type: 'jsonb' })
-  config: any;
-
-  @Column()
-  templateId: string;
+  @Column({ type: 'json' })
+  stages: any;
 
   @CreateDateColumn({
     comment: '创建时间',

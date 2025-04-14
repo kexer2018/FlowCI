@@ -4,9 +4,9 @@ import {
   Agent,
   Option,
   Trigger,
-} from '../interface/pipeline';
+} from '../../template/interface/pipeline';
 
-import { PipelineStage, PipelineStep } from '../interface/stage';
+import { PipelineStage, PipelineStep } from '../../template/interface/stage';
 
 export class PipelineBuilder {
   private config: PipelineConfig = {

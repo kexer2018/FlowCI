@@ -2,7 +2,7 @@
     "id": "e7f3445a-8049-4079-abb7-2f1476e384b3",
     "name": "node构建模板",
     "label": "node",
-    "type" :"buildIn",
+    "type" :"builtin",
     "description": "node基础构建模板,包含代码拉取,代码检查,单元测试",
     "stages": [
         {

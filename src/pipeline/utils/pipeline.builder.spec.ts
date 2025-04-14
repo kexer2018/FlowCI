@@ -1,4 +1,4 @@
-import { PipelineBuilder } from './ pipeline.builder';
+import { PipelineBuilder } from './pipeline.builder';
 
 describe('Pipeline Builder', () => {
   // 测试基础功能

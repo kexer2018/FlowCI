@@ -2,7 +2,7 @@
     "id": "494aeb5e-b2be-4118-877b-be1ce4270889",
     "name": "python构建模板",
     "label": "python",
-    "type" :"buildIn",
+    "type" :"builtin",
     "description": "python基础构建模板,包含代码拉取,代码检查,单元测试",
     "stages": [
         {

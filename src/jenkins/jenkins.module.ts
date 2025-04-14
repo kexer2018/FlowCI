@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { JenkinsService } from './jenkins.service';
-import { JenkinsController } from './jenkins.controller';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  controllers: [JenkinsController],
+  imports: [ConfigModule],
   providers: [JenkinsService],
+  exports: [JenkinsService],
 })
 export class JenkinsModule {}

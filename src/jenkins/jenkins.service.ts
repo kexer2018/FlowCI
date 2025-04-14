@@ -101,11 +101,9 @@ export class JenkinsService extends EventEmitter implements OnModuleInit {
     return folder ? this.jenkins.job.list(folder) : this.jenkins.job.list();
   }
 
-  // async createJob(opts: { name: string; type: string; config: any }) {
-  //   const { name, type, config } = opts;
-  //   const xml = await this.generateJobXML(type, config);
-  //   return this.jenkins.job.create(name, xml);
-  // }
+  async createJob(name: string, xml: string) {
+    return this.jenkins.job.create(name, xml);
+  }
 
   async checkExistsJob(name: string) {
     return this.jenkins.job.exists(name);

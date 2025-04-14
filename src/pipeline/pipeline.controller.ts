@@ -1,82 +1,46 @@
-// import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-// import { PipelineService } from './pipeline.service';
-// import { CreatePipelineDto } from './dto/create-pipeline.dto';
-
-// @Controller('pipeline')
-// export class PipelineController {
-//   constructor(private readonly pipelineService: PipelineService) {}
-
-//   // 获取所有内置模版
-//   @Get('templates')
-//   getAllTemplates() {
-//     return this.pipelineService.getAllTemplates();
-//   }
-
-//   // 获取某个指定模版
-//   @Get('templates/:id')
-//   getTemplateById(@Param('id') id: string) {
-//     return this.pipelineService.getTemplateById(id);
-//   }
-
-//   // 获取所有插件列表
-//   @Get('plugins')
-//   getAllPlugins() {
-//     return this.pipelineService.getAllPlugins();
-//   }
-
-//   // 获取某个插件信息
-//   @Get('plugins/:id')
-//   getPluginByName(@Param('id') id: string) {
-//     return this.pipelineService.getPluginByName(id);
-//   }
-
-//   @Post()
-//   createPipeline(config:CreatePipelineDto)
-
-//   @Put()
-//   updatePipeline(@Body(),id:string){
-
-//   }
-// }
 import {
   Controller,
   Post,
-  Put,
-  Body,
-  Param,
   Get,
+  Put,
   Delete,
+  Param,
+  Body,
 } from '@nestjs/common';
 import { PipelineService } from './pipeline.service';
 import { CreatePipelineDto } from './dto/create-pipeline.dto';
 import { UpdatePipelineDto } from './dto/update-pipeline.dto';
+import { PipelineEntity } from './entities/pipeline.entity';
 
-@Controller('pipeline')
+@Controller('pipelines')
 export class PipelineController {
   constructor(private readonly pipelineService: PipelineService) {}
 
   @Post()
-  createPipeline(@Body() dto: CreatePipelineDto) {
-    return this.pipelineService.create(dto);
-  }
-
-  @Put(':id')
-  updatePipeline(@Param('id') id: string, @Body() dto: UpdatePipelineDto) {
-    return this.pipelineService.update(id, dto);
-  }
-
-  @Get(':id')
-  getPipeline(@Param('id') id: string) {
-    return this.pipelineService.findOne(id);
+  async create(@Body() dto: CreatePipelineDto): Promise<PipelineEntity> {
+    return await this.pipelineService.create(dto);
   }
 
   @Get()
-  listPipelines() {
+  findAll(): Promise<PipelineEntity[]> {
     return this.pipelineService.findAll();
   }
 
+  @Get(':id')
+  findOne(@Param('id') id: string): Promise<PipelineEntity> {
+    return this.pipelineService.findOne(id);
+  }
+
+  @Put(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePipelineDto,
+  ): Promise<PipelineEntity> {
+    return this.pipelineService.update(id, dto);
+  }
+
   @Delete(':id')
-  deletePipeline(@Param('id') id: string) {
+  remove(@Param('id') id: string): Promise<void> {
     return this.pipelineService.delete(id);
   }
 }

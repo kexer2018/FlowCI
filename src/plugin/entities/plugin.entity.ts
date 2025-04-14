@@ -6,8 +6,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity()
-export class Plugin {
+@Entity('plugin')
+export class PluginEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -27,11 +27,18 @@ export class Plugin {
   type: 'builtin' | 'custom';
 
   @Column({ nullable: true })
-  icon: string; // 可选：图标路径
+  icon: string;
 
-  @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
-  created_at: Date;
+  @Column({ nullable: true, default: 'system' })
+  createBy: string;
 
-  @UpdateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
-  updated_at: Date;
+  @CreateDateColumn({
+    comment: '创建时间',
+  })
+  createAt: Date;
+
+  @UpdateDateColumn({
+    comment: '更新时间',
+  })
+  updateAt: Date;
 }
